@@ -1,0 +1,148 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>중간지점 찾기</title>
+    <link rel="stylesheet" type="text/css" href="{% static 'css/styles.css' %}">
+</head>
+<body>
+
+<!-- 상단 네비게이션 -->
+<nav class="topnav">
+    <div class="topnav-left">
+        <svg class="topnav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+            <circle cx="12" cy="11" r="3"/>
+        </svg>
+        <span class="topnav-title">중간지점 찾기</span>
+    </div>
+    <span class="topnav-desc">여러 출발지의 딱 중간 지하철역을 찾아드립니다</span>
+</nav>
+
+<!-- 지도 -->
+<div id="map"></div>
+
+<!-- 주소 입력 패널 -->
+<div class="panel" id="panel">
+    <div class="panel-drag-handle"></div>
+    <div class="panel-header">
+        <span class="panel-title">출발지 입력</span>
+        <div class="panel-header-actions">
+            <button class="btn-myloc" id="my-location-btn" onclick="addCurrentLocation()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 2v3m0 14v3M2 12h3m14 0h3"/>
+                </svg>
+                내 위치
+            </button>
+            <button class="panel-close" onclick="togglePanel()">✕</button>
+        </div>
+    </div>
+
+    <div id="midpointResult"></div>
+
+    <div class="input-container" id="input-container">
+        <div class="input-row">
+            <span class="input-label">1</span>
+            <input type="text" name="coordinate-input" class="coordinate-input" placeholder="클릭하여 출발지 검색" readonly>
+            <button class="remove-button" onclick="removeAddressInput(this)">✕</button>
+        </div>
+        <div class="input-row">
+            <span class="input-label">2</span>
+            <input type="text" name="coordinate-input" class="coordinate-input" placeholder="클릭하여 출발지 검색" readonly>
+            <button class="remove-button" onclick="removeAddressInput(this)">✕</button>
+        </div>
+    </div>
+
+    <div class="panel-actions">
+        <button class="btn-add" onclick="addAddressInput()">+ 추가</button>
+        <button class="btn-find" onclick="findMidpointAndStations()">중간지점 찾기</button>
+    </div>
+</div>
+
+<!-- 패널 토글 버튼 -->
+<button class="btn-toggle" id="btn-toggle" onclick="togglePanel()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+        <circle cx="12" cy="11" r="3"/>
+    </svg>
+    <span id="btn-toggle-label">주소 입력</span>
+</button>
+
+<!-- 사이드바 (장소 검색) -->
+<div class="sidebar-container">
+    <button id="toggle-sidebar-button" onclick="toggleSidebar()" title="장소 검색">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        장소 검색
+    </button>
+    <div id="menu_wrap">
+        <p class="sidebar-title">장소 검색</p>
+        <form onsubmit="searchPlaces(); return false;" class="search-form">
+            <input type="text" id="keyword" placeholder="카페, 식당, 지하철역...">
+            <button type="submit" id="search-button">검색</button>
+        </form>
+        <ul id="placesList"></ul>
+        <div id="pagination"></div>
+    </div>
+</div>
+
+<!-- 주소 검색 모달 -->
+<div class="addr-modal" id="addr-modal">
+    <div class="addr-modal-overlay" id="addr-modal-overlay"></div>
+    <div class="addr-modal-sheet">
+        <div class="addr-modal-drag"></div>
+        <div class="addr-modal-header">
+            <span class="addr-modal-title">출발지 검색</span>
+            <button class="addr-modal-close" id="addr-modal-close">✕</button>
+        </div>
+        <div class="addr-modal-search">
+            <svg class="addr-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input type="text" id="addr-search-input" placeholder="장소명 또는 주소를 입력하세요" autocomplete="off">
+        </div>
+        <ul id="addr-result-list"></ul>
+    </div>
+</div>
+
+<!-- 토스트 알림 -->
+<div class="toast" id="toast"></div>
+
+<script>
+    window.MIDPOINT_CONFIG = {
+        tmapAppKey: "{{ tmap_app_key|escapejs }}",
+    };
+</script>
+<script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey={{ kakao_js_key|urlencode }}&libraries=services"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="{% static 'js/address.js' %}"></script>
+<script src="{% static 'js/search.js' %}"></script>
+<script src="{% static 'js/midpoint.js' %}"></script>
+
+<script>
+    var panelOpen = true;
+    function togglePanel() {
+        var panel = document.getElementById('panel');
+        var label = document.getElementById('btn-toggle-label');
+        panelOpen = !panelOpen;
+        panel.classList.toggle('panel--hidden', !panelOpen);
+        label.textContent = panelOpen ? '닫기' : '주소 입력';
+    }
+
+    function showToast(msg) {
+        var toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.classList.add('toast--show');
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(function() {
+            toast.classList.remove('toast--show');
+        }, 2000);
+    }
+</script>
+
+</body>
+</html>
